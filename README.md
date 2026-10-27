@@ -9,19 +9,102 @@
 | 東北 | `shitei-touhoku-yakkyoku-r0810.xlsx` | 1ファイルに6県分のシート |
 | 東海北陸 | `2610-01-04.zip` | 6県分のxlsx |
 
-## 仕組み
+## アーキテクチャ
 
-```
-GitHub Actions（毎週月曜 9:00 JST・手動実行も可）
-  → 一覧ページ取得 → 薬局ファイルのリンク抽出 → 基準月の判定
-  → ダウンロード → SHA256で前回と比較（同じならここで終了）
-  → 検証（ファイル形式・サイズ・ZIP内の件数・東北のシート）→ ZIP展開
-  → GitHub Releases に保存 → state/manifest.json を commit → Slack 通知
+サーバーは使わず、GitHub の中だけで完結する。GitHub Actions が週1回 Python の収集処理を動かし、取得したファイルを GitHub Releases に置く。
+
+```mermaid
+flowchart LR
+    subgraph MHLW["地方厚生局ホームページ（取得元）"]
+        K["関東信越<br/>chousa/shitei.html<br/>→ 薬局ZIP"]
+        T["東北<br/>hoken_kikan/itiran.html<br/>→ 薬局xlsx"]
+        H["東海北陸<br/>newpage_00287.html<br/>→ 薬局ZIP"]
+    end
+
+    subgraph GH["GitHub：dkamekame/pharmacy-collector（非公開）"]
+        CRON["GitHub Actions<br/>毎週月曜 9:00 JST<br/>＋手動実行"]
+        APP["collector（Python）<br/>地域ごとの設定は config.yaml"]
+        REL[("Releases<br/>data-YYYY-MM：月ごとの保管<br/>latest：最新版")]
+        MAN[("state/manifest.json<br/>取得履歴・SHA256")]
+        ART[("Actions artifacts<br/>実行結果（90日）")]
+    end
+
+    SLACK["Slack<br/>Incoming Webhook"]
+
+    CRON -->|起動| APP
+    APP -->|"一覧ページ取得・ダウンロード<br/>（3秒間隔・User-Agent明示）"| MHLW
+    APP -->|原本とExcelを保存| REL
+    APP -->|"前回との比較・記録（commit）"| MAN
+    APP -->|実行結果| ART
+    APP -->|"新しい版・失敗・警告のときだけ"| SLACK
 ```
 
-- 各ページは「〇年〇月1日現在」のデータを月初より後に掲載するので、**週1回確認し、新しい版が出た週だけ保存する**。
-- 1つの地域が失敗しても、他の地域は続けて処理する。
-- 地域ごとの違い（URL・抽出条件・想定件数）はすべて [config.yaml](config.yaml) にある。
+| 構成要素 | 役割 |
+|---|---|
+| GitHub Actions（[collect.yml](.github/workflows/collect.yml)） | 実行の基盤。毎週月曜 9:00 JST の定期実行と手動実行。サーバー不要 |
+| collector（[src/collector/](src/collector/)） | 収集処理の本体。3地域で共通のコードで、違いは設定で吸収する |
+| [config.yaml](config.yaml) | 地域ごとの一覧ページURL、リンクの抽出条件、想定の件数・シート名。サイト構造が変わったらここを直す |
+| GitHub Releases | **ファイルの格納先**。`data-YYYY-MM` は月ごとに残し、`latest` は常に最新版に差し替える |
+| [state/manifest.json](state/manifest.json) | 取得の記録。前回との比較（SHA256）に使い、実行のたびに commit する |
+| Actions artifacts | 実行ごとの結果（`data/` と `report.json`）。確認用で90日後に消える |
+| Slack | 新しい版、失敗、警告のときだけ通知する |
+
+**この形にした理由**
+- **週1回の確認にした**: 各ページは「〇年〇月1日現在」のデータを月初より後に掲載する（東海北陸の更新日は10/6だった）。毎月1日に実行すると前月の版を拾ってしまうので、週1回確認し、新しい版が出た週だけ保存する。
+- **地域ごとの違いは設定に寄せた**: 配布の形が地域ごとに違う（関東はZIP、東北は1つのxlsxに6県分、東海北陸はZIP）。それでもコードは共通にし、違いは config.yaml だけに書く。
+- **1地域の失敗で止めない**: 1つの地域が失敗しても、他の地域は続けて処理する。
+- **原本を残し、加工は別にする**: このツールは原本の収集だけを担当し、Excelの中身には手を入れない。
+
+## 処理フロー
+
+### 1回の実行（ワークフロー全体）
+
+```mermaid
+flowchart LR
+    A["定期実行<br/>または手動実行"] --> B["Python環境の<br/>準備"]
+    B --> C["収集<br/>関東→東北→東海北陸<br/>の順に処理"]
+    C --> D["manifest を<br/>commit・push"]
+    D --> E["実行結果を<br/>artifacts に保存"]
+    C -.->|"新しい版・失敗・警告"| S["Slack 通知"]
+```
+
+### 地域ごとの処理
+
+```mermaid
+flowchart TD
+    A["① 一覧ページを取得"] --> B["② 薬局ファイルのリンクを抽出<br/>拡張子と文言で絞り、URLの形でも確認"]
+    B --> C{"想定の件数か"}
+    C -->|いいえ| F["失敗<br/>ページ構造が変わった可能性"]
+    C -->|はい| D["③ 基準月を判定<br/>ページの「〇年〇月1日現在」と<br/>ファイル名の年月を照合"]
+    D --> E["④ ダウンロード"]
+    E --> V{"⑤ 検証<br/>ファイル形式・サイズ<br/>東北は6県のシート"}
+    V -->|NG| F
+    V -->|OK| H{"⑥ 前回と比較<br/>SHA256"}
+    H -->|同じ| U["変更なし<br/>何もしない"]
+    H -->|古い月| SK["保存しない<br/>警告を出す"]
+    H -->|新しい月| N["新しい版"]
+    H -->|"同じ月で中身が違う"| R["差し替え（訂正版）<br/>2026-10_rev2 として別に保存"]
+    N --> X["⑦ ZIPを展開<br/>ファイル名の文字化けを直す"]
+    R --> X
+    X --> X2{"Excelの件数は想定どおりか<br/>関東10・東海北陸6"}
+    X2 -->|いいえ| F
+    X2 -->|はい| Y["⑧ Releases に保存<br/>data-YYYY-MM に追加<br/>latest を差し替え"]
+    Y --> Z["⑨ manifest に記録"]
+```
+
+東北は配布がxlsxなので、⑦のZIP展開は行わない。全地域の処理が終わったら、基準日から45日以上新しい版が出ていない地域がないかを確かめてから、Slack に通知する。
+
+| 処理 | 内容 | モジュール |
+|---|---|---|
+| ① 取得 | User-Agent を明示し、3秒以上の間隔をあける。5xxとタイムアウトは最大3回まで再試行し、SSLエラーは再試行しない | [http.py](src/collector/http.py) |
+| ② 抽出 | 拡張子と文言の両方に合うリンクを探す（全角と半角の違いは無視）。URLが想定の形と違えば警告する | [extract.py](src/collector/extract.py) |
+| ③ 版の判定 | リンクから遡って一番近い「〇年〇月〇日現在」を第一候補にし、ファイル名の年月（`r0810` や `2610`）と照合する | [version.py](src/collector/version.py) |
+| ⑤ 検証 | 先頭バイトでエラーページを見分け、サイズの下限と急な変化も確かめる。東北はシート名で6県が揃っているかを見る | [validate.py](src/collector/validate.py) |
+| ⑥ 差分判定 | 前回のSHA256と比べ、新しい版・変更なし・差し替え・古い版のどれかに振り分ける | [manifest.py](src/collector/manifest.py) |
+| ⑦ 展開 | CP932のファイル名や「\」区切りのフォルダに対応し、危険なパスは拒否する。名前は `{地域}_{版}_{元の名前}` にそろえる | [archive.py](src/collector/archive.py) |
+| ⑧ 保存 | 保存先は差し替えられる（ローカル・Releases、将来は Google Drive も） | [storage/](src/collector/storage/) |
+| 通知 | 変更なしだけのときは送らない | [notify.py](src/collector/notify.py) |
+| 全体の進行 | 各地域の処理をつなぎ、1地域が失敗しても続ける | [runner.py](src/collector/runner.py) / [cli.py](src/collector/cli.py) |
 
 ## セットアップ（GitHub Actions）
 
@@ -34,13 +117,27 @@ GitHub Actions（毎週月曜 9:00 JST・手動実行も可）
 6. 次に `dry_run` を外して実行し、Releases に `data-YYYY-MM` と `latest` ができることを確かめる。
 7. 以降は毎週月曜に自動で実行される。
 
-## 出力
+## 格納先（出力）
 
-**GitHub Releases**
-- `data-2026-10`: 基準月ごと。各地域の原本と、展開したExcelをまとめたZIPが入る。
-- `latest`: 各地域の最新版。いつも同じURLで取れる。
+収集したファイルは、このリポジトリの **[Releases](https://github.com/dkamekame/pharmacy-collector/releases)** に入る。PCや共有フォルダには保存しない。
 
-GitHubはアセット名の日本語を別の文字に置き換えてしまうので、ZIPから展開した日本語名のExcelは `{地域}_{版}_excel.zip` にまとめてから載せている（ZIP内の名前はUTF-8）。
+```
+Releases
+├─ latest          ← 各地域の最新版（新しい版が出るたびに差し替わる）
+│   ├─ kanto_2026-10_shitei_yakkyoku_r0810.zip            関東の原本
+│   ├─ kanto_2026-10_excel.zip                            関東 10都県分のExcel
+│   ├─ tohoku_2026-10_shitei-touhoku-yakkyoku-r0810.xlsx  東北 6県分（県ごとのシート）
+│   ├─ tokai_hokuriku_2026-10_2610-01-04.zip              東海北陸の原本
+│   └─ tokai_hokuriku_2026-10_excel.zip                   東海北陸 6県分のExcel
+├─ data-2026-10    ← 2026年10月版の保管用（消さずに残す）
+├─ data-2026-11    ← 以降、月ごとに増えていく
+└─ …
+```
+
+- **見る方法**: ブラウザで [latest](https://github.com/dkamekame/pharmacy-collector/releases/tag/latest) を開き、「Assets」からダウンロードする。最新版をまとめて取るなら `gh release download latest -R dkamekame/pharmacy-collector -D ./pharmacy-latest` を使う。
+- **見られる人**: 非公開リポジトリなので、リポジトリに招待された人だけ（Settings → Collaborators）。
+- **`excel.zip` を作る理由**: GitHub はアセット名の日本語を別の文字に置き換えてしまう。そのため、ZIPから展開した日本語名のExcelは `{地域}_{版}_excel.zip` にまとめてから載せている（ZIP内の名前はUTF-8）。Finder やエクスプローラーで展開すれば日本語名のまま出てくる。macOS 標準の `unzip -l` では `????` と表示されるが、これは古い `unzip` の表示の問題で、ファイル自体は正しい。
+- **Excelの中身**: 3地域とも、PDFと同じ印刷用のレイアウトのまま（原本なので手を入れていない）。列の見出し行がなく、1薬局が3行に分かれている（10列）。表データとして使うには、3行を1行に組み直す加工が別に必要。
 
 | アセット名の例 | 中身 |
 |---|---|
