@@ -1,0 +1,28 @@
+[project]
+name = "pharmacy-collector"
+version = "0.1.0"
+description = "厚生局3地域（関東信越・東北・東海北陸）の保険薬局指定一覧Excelを定期収集する"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+inspect = ["openpyxl>=3.1"]
+dev = ["pytest>=8", "openpyxl>=3.1"]
+
+[project.scripts]
+collector = "collector.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

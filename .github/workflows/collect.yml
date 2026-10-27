@@ -1,0 +1,90 @@
+name: collect-pharmacy-lists
+
+on:
+  schedule:
+    # 毎週月曜 9:00 JST（= UTC 0:00）。掲載日が月初から数日〜十数日後にばらつくため週次で確認し、
+    # 新しい版が出た週にだけ保存・通知する（差分判定は state/manifest.json）
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "抽出結果だけ確認する（ダウンロード・保存・通知なし）"
+        type: boolean
+        default: false
+      region:
+        description: "対象の地域キー（空なら全地域。例: tohoku）"
+        type: string
+        default: ""
+
+permissions:
+  contents: write   # Release の作成・アップロードと manifest の commit に必要
+
+concurrency:
+  group: collect-pharmacy-lists
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install .
+
+      - name: Collect
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REGION: ${{ inputs.region }}
+        run: |
+          args=(run --storage release --storage local --report-json report.json)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$REGION" ]; then args+=(--region "$REGION"); fi
+          python -m collector "${args[@]}"
+
+      # 一部の地域が失敗しても、成功した地域の記録は残す（always）
+      - name: Commit manifest
+        id: commit
+        if: always() && steps.collect.outcome != 'skipped'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/manifest.json
+          if git diff --cached --quiet; then
+            echo "manifest に変更なし"
+            exit 0
+          fi
+          git commit -m "chore: update manifest (run ${{ github.run_id }})"
+          git push
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-${{ github.run_id }}
+          path: |
+            data/
+            report.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      # 収集処理の失敗は Python 側で通知済み。それ以外のステップ（インストールや push）の失敗だけここで通知する
+      - name: Notify workflow failure
+        if: failure() && (steps.collect.outcome != 'failure' || steps.commit.outcome == 'failure')
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then exit 0; fi
+          text=":x: *厚生局 保険薬局指定一覧の収集ワークフローが失敗しました*（収集処理以外のステップ）"$'\n'"<${RUN_URL}|実行ログを開く>"
+          jq -n --arg text "$text" '{text: $text}' |
+            curl -sS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

@@ -1,0 +1,52 @@
+# 厚生局 保険薬局指定一覧 収集設定
+# サイト構造が変わったときは、基本的にこのファイルの修正だけで対応する（README「設定の変え方」参照）。
+
+http:
+  # 取得元に示す連絡先。リポジトリを移したら書き換える
+  user_agent: "pharmacy-collector/0.1 (+https://github.com/dkamekame/pharmacy-collector)"
+  interval_sec: 3        # リクエスト間隔（秒）
+  timeout_sec: 30
+  retries: 3             # 5xx・タイムアウト時の再試行回数（指数バックオフ）
+
+monitoring:
+  stale_after_days: 45   # 基準日がこれより古いままなら「更新停滞」と警告する
+
+regions:
+  kanto:
+    label: 関東信越厚生局
+    page_url: https://kouseikyoku.mhlw.go.jp/kantoshinetsu/chousa/shitei.html
+    link:
+      ext: [".zip"]
+      text_contains: ["薬局"]                       # 実際の文言:「薬局（ZIP）」
+      href_pattern: 'shitei_yakkyoku_r\d{4}\.zip$'  # 確認用。外れたら警告（失敗にはしない）
+    expected_links: 1
+    version_token:
+      pattern: '_r(?P<reiwa>\d{2})(?P<month>\d{2})\.'   # shitei_yakkyoku_r0810.zip → 令和8年10月
+      era: reiwa
+    zip_expected_excels: 10     # 10都県分（2026-10版の実ファイルで確認）
+
+  tohoku:
+    label: 東北厚生局
+    page_url: https://kouseikyoku.mhlw.go.jp/tohoku/gyomu/gyomu/hoken_kikan/itiran.html
+    link:
+      ext: [".xlsx", ".xls"]                        # 県別の「薬局」リンクはPDFなので拡張子で除外する
+      text_contains: ["薬局"]                       # 実際の文言:「薬局［1.5MB］」
+      href_pattern: 'shitei-touhoku-yakkyoku-r\d{4}\.xlsx?$'
+    expected_links: 1           # 6県分が1ファイルにまとまっている
+    version_token:
+      pattern: '-r(?P<reiwa>\d{2})(?P<month>\d{2})\.'   # shitei-touhoku-yakkyoku-r0810.xlsx → 令和8年10月
+      era: reiwa
+    expected_sheets: [青森県, 岩手県, 宮城県, 秋田県, 山形県, 福島県]   # 県ごとのシート（2026-10版で確認）
+
+  tokai_hokuriku:
+    label: 東海北陸厚生局
+    page_url: https://kouseikyoku.mhlw.go.jp/tokaihokuriku/newpage_00287.html
+    link:
+      ext: [".zip"]
+      text_contains: ["（薬局）"]                   # 実際の文言:「コード内容別医療機関一覧表（薬局）［ZIP形式：1,615KB］」
+      href_pattern: '\d{4}-\d{2}-04\.zip$'
+    expected_links: 1
+    version_token:
+      pattern: '^(?P<yy>\d{2})(?P<month>\d{2})-\d{2}-\d{2}\.'   # 2610-01-04.zip → 2026年10月
+      era: western2
+    zip_expected_excels: 6      # 6県分（2026-10版の実ファイルで確認）
