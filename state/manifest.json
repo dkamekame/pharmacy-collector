@@ -1,4 +1,120 @@
 {
   "schema": 1,
-  "regions": {}
+  "regions": {
+    "kanto": {
+      "history": [
+        {
+          "data_month": "2026-10",
+          "as_of": "2026-10-01",
+          "label": "2026-10",
+          "status": "new",
+          "sha256": [
+            "6ac5e2c9333eba4c6013a7d77aaa04e47eb319e4a0f55f508486f5eb915b3e34"
+          ],
+          "fetched_at": "2026-10-27T06:44:45Z"
+        }
+      ],
+      "data_month": "2026-10",
+      "as_of": "2026-10-01",
+      "label": "2026-10",
+      "sources": [
+        {
+          "url": "https://kouseikyoku.mhlw.go.jp/kantoshinetsu/shitei_yakkyoku_r0810.zip",
+          "sha256": "6ac5e2c9333eba4c6013a7d77aaa04e47eb319e4a0f55f508486f5eb915b3e34",
+          "size": 4782120
+        }
+      ],
+      "files": [
+        "kanto_2026-10_shitei_yakkyoku_r0810.zip",
+        "kanto_2026-10_085コード内容別一覧表(薬局)茨城r0810.xlsx",
+        "kanto_2026-10_095コード内容別一覧表(薬局)栃木r0810.xlsx",
+        "kanto_2026-10_105コード内容別一覧表(薬局)群馬r0810.xlsx",
+        "kanto_2026-10_115コード内容別一覧表(薬局)埼玉r0810.xlsx",
+        "kanto_2026-10_125コード内容別一覧表(薬局)千葉r0810.xlsx",
+        "kanto_2026-10_135コード内容別一覧表(薬局)東京r0810.xlsx",
+        "kanto_2026-10_145コード内容別一覧表(薬局)神奈川r0810.xlsx",
+        "kanto_2026-10_155コード内容別一覧表(薬局)新潟r0810.xlsx",
+        "kanto_2026-10_195コード内容別一覧表(薬局)山梨r0810.xlsx",
+        "kanto_2026-10_205コード内容別一覧表(薬局)長野r0810.xlsx"
+      ],
+      "storage_refs": [
+        "https://github.com/dkamekame/pharmacy-collector/releases/tag/data-2026-10",
+        "data/kanto/2026-10"
+      ],
+      "fetched_at": "2026-10-27T06:44:45Z",
+      "last_checked_at": "2026-10-27T06:44:45Z"
+    },
+    "tohoku": {
+      "history": [
+        {
+          "data_month": "2026-10",
+          "as_of": "2026-10-01",
+          "label": "2026-10",
+          "status": "new",
+          "sha256": [
+            "6c01b950e17ac8ce34cafe470c69fbcf698f4b917b03bacc3c9b6f5953578d70"
+          ],
+          "fetched_at": "2026-10-27T06:44:45Z"
+        }
+      ],
+      "data_month": "2026-10",
+      "as_of": "2026-10-01",
+      "label": "2026-10",
+      "sources": [
+        {
+          "url": "https://kouseikyoku.mhlw.go.jp/tohoku/shitei-touhoku-yakkyoku-r0810.xlsx",
+          "sha256": "6c01b950e17ac8ce34cafe470c69fbcf698f4b917b03bacc3c9b6f5953578d70",
+          "size": 1524678
+        }
+      ],
+      "files": [
+        "tohoku_2026-10_shitei-touhoku-yakkyoku-r0810.xlsx"
+      ],
+      "storage_refs": [
+        "https://github.com/dkamekame/pharmacy-collector/releases/tag/data-2026-10",
+        "data/tohoku/2026-10"
+      ],
+      "fetched_at": "2026-10-27T06:44:45Z",
+      "last_checked_at": "2026-10-27T06:44:45Z"
+    },
+    "tokai_hokuriku": {
+      "history": [
+        {
+          "data_month": "2026-10",
+          "as_of": "2026-10-01",
+          "label": "2026-10",
+          "status": "new",
+          "sha256": [
+            "866f968fe120972e5bd1129b2a3087a84f26bdcc47a8736cc5af1e209bccd2d3"
+          ],
+          "fetched_at": "2026-10-27T06:44:45Z"
+        }
+      ],
+      "data_month": "2026-10",
+      "as_of": "2026-10-01",
+      "label": "2026-10",
+      "sources": [
+        {
+          "url": "https://kouseikyoku.mhlw.go.jp/tokaihokuriku/2610-01-04.zip",
+          "sha256": "866f968fe120972e5bd1129b2a3087a84f26bdcc47a8736cc5af1e209bccd2d3",
+          "size": 1615192
+        }
+      ],
+      "files": [
+        "tokai_hokuriku_2026-10_2610-01-04.zip",
+        "tokai_hokuriku_2026-10_2610(三重薬局)コード内容別医療機関一覧表.xlsx",
+        "tokai_hokuriku_2026-10_2610(富山薬局)コード内容別医療機関一覧表.xlsx",
+        "tokai_hokuriku_2026-10_2610(岐阜薬局)コード内容別医療機関一覧表.xlsx",
+        "tokai_hokuriku_2026-10_2610(愛知薬局)コード内容別医療機関一覧表.xlsx",
+        "tokai_hokuriku_2026-10_2610(石川薬局)コード内容別医療機関一覧表.xlsx",
+        "tokai_hokuriku_2026-10_2610(静岡薬局)コード内容別医療機関一覧表.xlsx"
+      ],
+      "storage_refs": [
+        "https://github.com/dkamekame/pharmacy-collector/releases/tag/data-2026-10",
+        "data/tokai_hokuriku/2026-10"
+      ],
+      "fetched_at": "2026-10-27T06:44:45Z",
+      "last_checked_at": "2026-10-27T06:44:45Z"
+    }
+  }
 }
